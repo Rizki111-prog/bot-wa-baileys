@@ -1,0 +1,26 @@
+# Dependencies
+node_modules/
+package-lock.json
+
+# Session & Auth Data (CRITICAL: DO NOT COMMIT SESSIONS TO GITHUB)
+session/
+auth_info_baileys/
+baileys_store_multi.json
+
+# Environment variables
+.env
+.env.local
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# OS specific files
+.DS_Store
+Thumbs.db
+
+# Temp media files
+temp/
+tmp/
