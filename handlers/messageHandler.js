@@ -50,7 +50,7 @@ export async function handleMessage(sock, msg) {
   try {
     if (!msg.message) return;
 
-    // Extract message body
+    // Extract message body across standard and button/interactive message types
     const messageType = Object.keys(msg.message)[0];
     let body = '';
 
@@ -62,6 +62,19 @@ export async function handleMessage(sock, msg) {
       body = msg.message.imageMessage.caption;
     } else if (messageType === 'videoMessage') {
       body = msg.message.videoMessage.caption;
+    } else if (messageType === 'buttonsResponseMessage') {
+      body = msg.message.buttonsResponseMessage.selectedButtonId || msg.message.buttonsResponseMessage.selectedDisplayText;
+    } else if (messageType === 'templateButtonReplyMessage') {
+      body = msg.message.templateButtonReplyMessage.selectedId || msg.message.templateButtonReplyMessage.selectedDisplayText;
+    } else if (messageType === 'listResponseMessage') {
+      body = msg.message.listResponseMessage.singleSelectReply?.selectedRowId || msg.message.listResponseMessage.title;
+    } else if (messageType === 'interactiveResponseMessage') {
+      try {
+        const params = JSON.parse(msg.message.interactiveResponseMessage.nativeFlowResponseMessage?.paramsJson || '{}');
+        body = params.id || params.text || '';
+      } catch {
+        body = '';
+      }
     }
 
     if (!body) return;
