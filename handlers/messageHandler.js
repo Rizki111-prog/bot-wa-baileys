@@ -9,6 +9,25 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 export const commands = new Map();
+export const seenUsers = new Set();
+export const userSessions = {};
+
+export function getWelcomeMenuText() {
+  return `⚡ *SERVICE CENTER WAHYU ELEKTRONIK* ⚡
+
+Silakan ketik *angka pilihan* di bawah ini:
+
+1️⃣  *Cek Status Servis*
+└ Cek pengerjaan & status unit Anda
+
+2️⃣  *Hubungi Admin / Teknisi*
+└ Konsultasi langsung dengan CS / AI
+
+📍 _Jl. Toko Servis Laragon_
+⏰ _Senin - Sabtu (08.00 - 17.00 WIB)_
+
+💡 _Ketik angka *1* atau *2* untuk memilih._`;
+}
 
 // Dynamic Command Loader
 export async function loadCommands() {
@@ -81,10 +100,72 @@ export async function handleMessage(sock, msg) {
 
     if (!body) return;
 
-    const isGroup = msg.key.remoteJid.endsWith('@g.us');
-    const sender = msg.key.participant || msg.key.remoteJid;
+    const remoteJid = msg.key.remoteJid;
+    const isGroup = remoteJid.endsWith('@g.us');
+    const sender = msg.key.participant || remoteJid;
     const isOwner = config.ownerNumber.some(num => sender.includes(num));
+    const lowerBody = body.trim().toLowerCase();
 
+    // Helper reply function
+    const reply = async (text) => {
+      return await sock.sendMessage(remoteJid, { text }, { quoted: msg });
+    };
+
+    // 1. CEK PENGGUNA PERTAMA KALI (WELCOMING MENU - BOT TANPA AI)
+    if (!seenUsers.has(remoteJid) && !isGroup) {
+      seenUsers.add(remoteJid);
+      userSessions[remoteJid] = { step: 'AWAITING_MENU_CHOICE' };
+      return await reply(getWelcomeMenuText());
+    }
+
+    // 2. NAVIGASI KEMBALI KE MENU UTAMA (BOT TANPA AI)
+    if (lowerBody === 'menu' || lowerBody === 'help' || lowerBody === '0' || lowerBody === 'batal' || lowerBody === `${config.prefix}menu` || lowerBody === `${config.prefix}help`) {
+      seenUsers.add(remoteJid);
+      userSessions[remoteJid] = { step: 'AWAITING_MENU_CHOICE' };
+      return await reply(getWelcomeMenuText());
+    }
+
+    // 3. PILIHAN MENU 1: CEK STATUS SERVIS (DIJALANKAN BOT DENGAN RESPON FORMAL, TANPA CAMPUR TANGAN AI)
+    if (lowerBody === '1' || lowerBody === 'cek status' || lowerBody === 'status' || lowerBody === `${config.prefix}status`) {
+      userSessions[remoteJid] = { step: 'AWAITING_SERVICE_ID' };
+      return await reply(
+        `🔎 *CEK STATUS SERVIS*\n\n` +
+        `Silakan masukkan *ID Servis* Anda.\n` +
+        `📌 *Contoh:* \`WE-11183650\`\n\n` +
+        `💡 _Ketik *menu* untuk kembali._`
+      );
+    }
+
+    // 4. ALUR BOT UNTUK MENU 1 (SAAT PENGGUNA MEMASUKKAN ID SERVIS) -> BOT DIJALANKAN TANPA AI PICOCLAW
+    const currentSession = userSessions[remoteJid];
+    if (currentSession && currentSession.step === 'AWAITING_SERVICE_ID') {
+      const inputId = body.trim();
+      delete userSessions[remoteJid]; // Selesai alur cek status
+
+      let statusResponse = `📋 *INFORMASI STATUS SERVIS*\n\n`;
+      statusResponse += `🆔 *ID Servis*  : \`${inputId}\`\n`;
+      statusResponse += `👤 *Pelanggan*  : ${msg.pushName || 'Pelanggan'}\n`;
+      statusResponse += `📱 *Unit Barang*: Unit Elektronik\n`;
+      statusResponse += `📌 *Status*     : 🔧 *DALAM PROSES SERVIS*\n`;
+      statusResponse += `📅 *Tgl Cek*    : ${new Date().toLocaleDateString('id-ID')}\n\n`;
+      statusResponse += `💡 _Pengerjaan unit sedang dalam penanganan teknisi. Ketik *2* untuk hubungi CS/AI, atau ketik *menu* untuk kembali._`;
+
+      console.log(`[BOT STATUS] User ${sender} memeriksa ID Servis: ${inputId} (Bot langsung tanpa AI)`);
+      return await reply(statusResponse);
+    }
+
+    // 5. PILIHAN MENU 2: CHAT ADMIN / CS AI -> PENGGUNA TERHUBUNG DENGAN PICOCLAW AI
+    if (lowerBody === '2' || lowerBody === 'admin' || lowerBody === 'chat admin' || lowerBody === `${config.prefix}admin`) {
+      userSessions[remoteJid] = { step: 'CONNECTED_TO_AI' };
+      return await reply(
+        `💬 *CHAT ADMIN / CS AI*\n\n` +
+        `Anda sekarang terhubung dengan Tim Support CS AI Wahyu Elektronik.\n` +
+        `Silakan ketik pertanyaan atau kendala Anda di sini!\n\n` +
+        `💡 _Ketik *menu* untuk kembali ke menu utama._`
+      );
+    }
+
+    // 6. PENANGANAN EKSEKUSI COMMAND BERPREFIX (.ping, .owner, dll)
     const prefix = config.prefix;
     const isCommand = body.startsWith(prefix);
 
@@ -96,12 +177,7 @@ export async function handleMessage(sock, msg) {
 
       const command = commands.get(commandName);
       if (command) {
-        const reply = async (text) => {
-          return await sock.sendMessage(msg.key.remoteJid, { text }, { quoted: msg });
-        };
-
         console.log(`[EXECUTE] Command: ${commandName} | Sender: ${sender} | Group: ${isGroup}`);
-
         return await command.execute({
           sock,
           msg,
@@ -118,18 +194,14 @@ export async function handleMessage(sock, msg) {
       }
     }
 
-    // Auto-chat ke PicoClaw untuk pesan biasa (tanpa perlu .pico)
+    // 7. APABILA PENGGUNA DALAM SESI CHAT AI / PESAN BIASA -> TERUSKAN KE PICOCLAW AI
     if (config.picoClaw?.enabled && (config.picoClaw.autoChat !== false)) {
       if (isGroup && config.picoClaw.groupAutoChat === false) return;
 
       if (isPicoClawConnected()) {
-        const targetJid = msg.key.remoteJid;
-        const senderName = msg.pushName || 'Pengguna WA';
-
-        picoClawService.setLastTarget(targetJid);
-
+        picoClawService.setLastTarget(remoteJid);
         const sent = picoClawService.send({
-          chatId: targetJid,
+          chatId: remoteJid,
           senderId: sender,
           content: body,
           text: body,
@@ -138,14 +210,14 @@ export async function handleMessage(sock, msg) {
           prompt: body,
           channel: 'whatsapp',
           type: 'message',
-          from: targetJid,
-          user: targetJid,
-          target: targetJid,
-          senderName: senderName
+          from: remoteJid,
+          user: remoteJid,
+          target: remoteJid,
+          senderName: msg.pushName || 'Pengguna WA'
         });
 
         if (sent) {
-          console.log(`[PicoClaw AutoChat] 🚀 Pesan dari ${sender} ("${body}") langsung diteruskan ke PicoClaw`);
+          console.log(`[PicoClaw AutoChat] 🚀 Pesan dari ${sender} ("${body}") diteruskan ke PicoClaw`);
         }
       }
     }
