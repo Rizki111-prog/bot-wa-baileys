@@ -15,6 +15,8 @@ export const config = {
     port: 3001,
     serverPort: 3001,
     url: 'ws://localhost:3001',
-    payloadFormat: 'json'        // Format payload: 'json', 'simple', atau 'raw'
+    payloadFormat: 'json',       // Format payload: 'json', 'simple', atau 'raw'
+    autoChat: true,              // true: chat biasa tanpa prefix otomatis dijawab AI PicoClaw
+    groupAutoChat: true          // true: aktifkan auto-chat di grup juga
   }
 };

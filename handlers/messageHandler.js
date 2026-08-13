@@ -2,6 +2,8 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath, pathToFileURL } from 'url';
 import { config } from '../config.js';
+import { picoClawService } from '../services/picoClawService.js';
+import { isPicoClawConnected } from '../services/picoClaw.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -83,40 +85,70 @@ export async function handleMessage(sock, msg) {
     const sender = msg.key.participant || msg.key.remoteJid;
     const isOwner = config.ownerNumber.some(num => sender.includes(num));
 
-    // Check prefix
     const prefix = config.prefix;
-    if (!body.startsWith(prefix)) return;
+    const isCommand = body.startsWith(prefix);
 
-    const args = body.slice(prefix.length).trim().split(/ +/);
-    const commandName = args.shift().toLowerCase();
+    if (isCommand) {
+      const args = body.slice(prefix.length).trim().split(/ +/);
+      const commandName = args.shift().toLowerCase();
 
-    if (!config.isPublic && !isOwner) {
-      return; // Self-mode check
+      if (!config.isPublic && !isOwner) return;
+
+      const command = commands.get(commandName);
+      if (command) {
+        const reply = async (text) => {
+          return await sock.sendMessage(msg.key.remoteJid, { text }, { quoted: msg });
+        };
+
+        console.log(`[EXECUTE] Command: ${commandName} | Sender: ${sender} | Group: ${isGroup}`);
+
+        return await command.execute({
+          sock,
+          msg,
+          args,
+          prefix,
+          commandName,
+          body,
+          sender,
+          isGroup,
+          isOwner,
+          reply,
+          commands
+        });
+      }
     }
 
-    const command = commands.get(commandName);
-    if (!command) return;
+    // Auto-chat ke PicoClaw untuk pesan biasa (tanpa perlu .pico)
+    if (config.picoClaw?.enabled && (config.picoClaw.autoChat !== false)) {
+      if (isGroup && config.picoClaw.groupAutoChat === false) return;
 
-    // Helper reply function
-    const reply = async (text) => {
-      return await sock.sendMessage(msg.key.remoteJid, { text }, { quoted: msg });
-    };
+      if (isPicoClawConnected()) {
+        const targetJid = msg.key.remoteJid;
+        const senderName = msg.pushName || 'Pengguna WA';
 
-    console.log(`[EXECUTE] Command: ${commandName} | Sender: ${sender} | Group: ${isGroup}`);
+        picoClawService.setLastTarget(targetJid);
 
-    await command.execute({
-      sock,
-      msg,
-      args,
-      prefix,
-      commandName,
-      body,
-      sender,
-      isGroup,
-      isOwner,
-      reply,
-      commands
-    });
+        const sent = picoClawService.send({
+          chatId: targetJid,
+          senderId: sender,
+          content: body,
+          text: body,
+          body: body,
+          message: body,
+          prompt: body,
+          channel: 'whatsapp',
+          type: 'message',
+          from: targetJid,
+          user: targetJid,
+          target: targetJid,
+          senderName: senderName
+        });
+
+        if (sent) {
+          console.log(`[PicoClaw AutoChat] 🚀 Pesan dari ${sender} ("${body}") langsung diteruskan ke PicoClaw`);
+        }
+      }
+    }
 
   } catch (err) {
     console.error(`[ERROR] Message handler error:`, err);

@@ -12,6 +12,22 @@ import { picoClawService } from './services/picoClawService.js';
 
 let currentSock = null;
 
+function formatAiReply(rawText) {
+  let cleaned = String(rawText || '').trim();
+  cleaned = cleaned
+    .replace(/🦞/g, '')
+    .replace(/🤖/g, '')
+    .replace(/^(\*?\[?PicoClaw AI\]?\*?:?\s*)/gi, '')
+    .replace(/^PicoClaw\s*:?\s*/gi, '')
+    .trim();
+
+  if (!cleaned) return '';
+  if (cleaned.endsWith('-cs ai')) return cleaned;
+
+  return cleaned.includes('\n') ? `${cleaned}\n\n-cs ai` : `${cleaned} -cs ai`;
+}
+
+
 async function startBot() {
   console.log(`[SYS] Initializing ${config.botName}...`);
 
@@ -53,7 +69,8 @@ async function startBot() {
           formattedTarget = `${formattedTarget.replace(/[^0-9]/g, '')}@s.whatsapp.net`;
         }
 
-        await currentSock.sendMessage(formattedTarget, { text: `🤖 *[PicoClaw AI]*:\n${text}` });
+        const replyText = formatAiReply(text);
+        await currentSock.sendMessage(formattedTarget, { text: replyText });
         console.log(`[PicoClaw Bridge] ✅ Pesan dari PicoClaw berhasil dikirim ke WhatsApp (${formattedTarget})`);
       } else {
         console.warn('[PicoClaw Bridge] ⚠️ Frame diterima dari PicoClaw tetapi tidak ada teks atau target WhatsApp yang valid.');
