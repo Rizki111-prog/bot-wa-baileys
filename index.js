@@ -9,6 +9,7 @@ import { Boom } from '@hapi/boom';
 import { config } from './config.js';
 import { loadCommands, handleMessage } from './handlers/messageHandler.js';
 import { picoClawService } from './services/picoClawService.js';
+import { testConnection } from './db.js';
 
 let currentSock = null;
 
@@ -30,6 +31,9 @@ function formatAiReply(rawText) {
 
 async function startBot() {
   console.log(`[SYS] Initializing ${config.botName}...`);
+
+  // Test Database Connection
+  await testConnection();
 
   // Start PicoClaw WebSocket Server Bridge (Port 3001)
   picoClawService.connect();

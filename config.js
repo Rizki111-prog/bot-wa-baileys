@@ -18,5 +18,17 @@ export const config = {
     payloadFormat: 'json',       // Format payload: 'json', 'simple', atau 'raw'
     autoChat: true,              // true: chat biasa tanpa prefix otomatis dijawab AI PicoClaw
     groupAutoChat: true          // true: aktifkan auto-chat di grup juga
+  },
+
+  // Konfigurasi Database MySQL (Laragon)
+  db: {
+    host: process.env.DB_HOST || 'localhost',
+    user: process.env.DB_USER || 'root',
+    password: process.env.DB_PASSWORD || '',
+    database: process.env.DB_NAME || 'data-toko',
+    port: process.env.DB_PORT || 3306,
+    waitForConnections: true,
+    connectionLimit: 10,
+    queueLimit: 0
   }
 };

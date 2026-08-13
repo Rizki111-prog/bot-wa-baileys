@@ -4,6 +4,7 @@ import { fileURLToPath, pathToFileURL } from 'url';
 import { config } from '../config.js';
 import { picoClawService } from '../services/picoClawService.js';
 import { isPicoClawConnected } from '../services/picoClaw.js';
+import { checkStatusStrict, buildDbContext } from '../services/servisService.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -136,22 +137,52 @@ export async function handleMessage(sock, msg) {
       );
     }
 
-    // 4. ALUR BOT UNTUK MENU 1 (SAAT PENGGUNA MEMASUKKAN ID SERVIS) -> BOT DIJALANKAN TANPA AI PICOCLAW
+    // 4. ALUR BOT UNTUK MENU 1 (CEK STATUS SERVIS DATABASE LARAGON - TANPA AI)
     const currentSession = userSessions[remoteJid];
     if (currentSession && currentSession.step === 'AWAITING_SERVICE_ID') {
       const inputId = body.trim();
       delete userSessions[remoteJid]; // Selesai alur cek status
 
-      let statusResponse = `📋 *INFORMASI STATUS SERVIS*\n\n`;
-      statusResponse += `🆔 *ID Servis*  : \`${inputId}\`\n`;
-      statusResponse += `👤 *Pelanggan*  : ${msg.pushName || 'Pelanggan'}\n`;
-      statusResponse += `📱 *Unit Barang*: Unit Elektronik\n`;
-      statusResponse += `📌 *Status*     : 🔧 *DALAM PROSES SERVIS*\n`;
-      statusResponse += `📅 *Tgl Cek*    : ${new Date().toLocaleDateString('id-ID')}\n\n`;
-      statusResponse += `💡 _Pengerjaan unit sedang dalam penanganan teknisi. Ketik *2* untuk hubungi CS/AI, atau ketik *menu* untuk kembali._`;
+      try {
+        const results = await checkStatusStrict(inputId);
 
-      console.log(`[BOT STATUS] User ${sender} memeriksa ID Servis: ${inputId} (Bot langsung tanpa AI)`);
-      return await reply(statusResponse);
+        if (!results || results.length === 0) {
+          const notFoundText = `⚠️ *Data status servis tidak ditemukan.*\n\nID Servis \`${inputId}\` tidak ditemukan pada data barang masuk, selesai, maupun diambil.\n\n💡 _Ketik *1* untuk coba lagi, ketik *2* untuk hubungi CS/AI, atau ketik *menu* untuk kembali._`;
+          return await reply(notFoundText);
+        }
+
+        let text = `📋 *INFORMASI STATUS SERVIS*\n\n`;
+        results.forEach((item, idx) => {
+          text += `🆔 *ID Servis*  : \`${item.service_id}\`\n`;
+          text += `👤 *Pelanggan*  : ${item.nama}\n`;
+          text += `📱 *Unit Barang*: ${item.nama_barang} (${item.kategori})\n`;
+          text += `🔧 *Kendala*    : ${item.kerusakan}\n`;
+          text += `📌 *Status*     : ${item.statusLabel}\n`;
+
+          if (item.type === 'masuk') {
+            text += `📅 *Tgl Masuk*  : ${item.tanggal_masuk}\n`;
+            text += `💰 *Biaya*      : ${item.biaya}\n`;
+          } else if (item.type === 'selesai') {
+            text += `📝 *Perbaikan*  : ${item.catatan}\n`;
+            text += `📅 *Tgl Selesai*: ${item.tanggal_selesai}\n`;
+            text += `💰 *Total Biaya*: *${item.biaya}*\n`;
+            if (item.teknisi !== '-') text += `👨‍🔧 *Teknisi*   : ${item.teknisi}\n`;
+          } else if (item.type === 'diambil') {
+            text += `📅 *Tgl Diambil*: ${item.tanggal_diambil}\n`;
+            text += `💰 *Total Biaya*: *${item.biaya}*\n`;
+            text += `🛡️ *Garansi*    : ${item.garansi}\n`;
+          }
+
+          if (idx < results.length - 1) text += `\n───────────────────\n\n`;
+        });
+
+        text += `\n💡 _Ketik *2* untuk konsultasi CS, atau ketik *menu* untuk kembali._`;
+        return await reply(text.trim());
+
+      } catch (err) {
+        console.error('[DB STATUS ERROR]', err.message);
+        return await reply(`⚠️ Terjadi kesalahan saat membaca data dari database Laragon.`);
+      }
     }
 
     // 5. PILIHAN MENU 2: CHAT ADMIN / CS AI -> PENGGUNA TERHUBUNG DENGAN PICOCLAW AI
@@ -194,20 +225,25 @@ export async function handleMessage(sock, msg) {
       }
     }
 
-    // 7. APABILA PENGGUNA DALAM SESI CHAT AI / PESAN BIASA -> TERUSKAN KE PICOCLAW AI
+    // 7. APABILA PENGGUNA DALAM SESI CHAT AI / PESAN BIASA -> TERUSKAN KE PICOCLAW AI DENGAN ENRICHMENT DATABASE LARAGON
     if (config.picoClaw?.enabled && (config.picoClaw.autoChat !== false)) {
       if (isGroup && config.picoClaw.groupAutoChat === false) return;
 
       if (isPicoClawConnected()) {
         picoClawService.setLastTarget(remoteJid);
+
+        // Ambil konteks database resmi dari Laragon (status servis & estimasi biaya)
+        const dbContext = await buildDbContext(body);
+        const promptWithContext = dbContext ? `${dbContext}\n\n[PESAN / PERTANYAAN PELANGGAN]: "${body}"` : body;
+
         const sent = picoClawService.send({
           chatId: remoteJid,
           senderId: sender,
-          content: body,
-          text: body,
-          body: body,
-          message: body,
-          prompt: body,
+          content: promptWithContext,
+          text: promptWithContext,
+          body: promptWithContext,
+          message: promptWithContext,
+          prompt: promptWithContext,
           channel: 'whatsapp',
           type: 'message',
           from: remoteJid,
@@ -217,7 +253,7 @@ export async function handleMessage(sock, msg) {
         });
 
         if (sent) {
-          console.log(`[PicoClaw AutoChat] 🚀 Pesan dari ${sender} ("${body}") diteruskan ke PicoClaw`);
+          console.log(`[PicoClaw AutoChat + DB Context] 🚀 Pesan dari ${sender} ("${body}") & Konteks Database Laragon diteruskan ke PicoClaw`);
         }
       }
     }
