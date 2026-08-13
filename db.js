@@ -5,6 +5,7 @@ export const pool = mysql.createPool(config.db);
 
 export async function testConnection() {
   try {
+    console.log([DB] Menghubungkan user \\\ ke database \\\ (:)...);
     const connection = await pool.getConnection();
     console.log(`[✓] Berhasil terhubung ke database MySQL Laragon: '${config.db.database}'`);
     connection.release();

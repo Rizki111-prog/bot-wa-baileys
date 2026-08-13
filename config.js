@@ -1,3 +1,14 @@
+import dotenv from 'dotenv';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// Explicitly load .env file from project directory
+dotenv.config({ path: path.join(__dirname, '.env') });
+dotenv.config();
+
 // Project Configuration
 
 export const config = {
@@ -20,13 +31,13 @@ export const config = {
     groupAutoChat: true          // true: aktifkan auto-chat di grup juga
   },
 
-  // Konfigurasi Database MySQL (Laragon)
+  // Konfigurasi Database MySQL / MariaDB
   db: {
-    host: process.env.DB_HOST || 'localhost',
-    user: process.env.DB_USER || 'root',
-    password: process.env.DB_PASSWORD || '',
-    database: process.env.DB_NAME || 'data-toko',
-    port: process.env.DB_PORT || 3306,
+    host: (process.env.DB_HOST || 'localhost').split('#')[0].trim(),
+    user: (process.env.DB_USER || 'root').split('#')[0].trim(),
+    password: (process.env.DB_PASSWORD || '').split('#')[0].trim(),
+    database: (process.env.DB_NAME || 'data-toko').split('#')[0].trim(),
+    port: parseInt((process.env.DB_PORT || '3306').split('#')[0].trim(), 10) || 3306,
     waitForConnections: true,
     connectionLimit: 10,
     queueLimit: 0
