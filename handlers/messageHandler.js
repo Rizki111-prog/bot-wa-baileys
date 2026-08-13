@@ -234,7 +234,10 @@ export async function handleMessage(sock, msg) {
 
         // Ambil konteks database resmi dari Laragon (status servis & estimasi biaya)
         const dbContext = await buildDbContext(body);
-        const promptWithContext = dbContext ? `${dbContext}\n\n[PESAN / PERTANYAAN PELANGGAN]: "${body}"` : body;
+        const systemInstruction = `[GAYA BAHASA AI]: Jawablah secara SINGKAT, SIMPEL, dan TO THE POINT, namun tetap RAMAH, SOPAN, dan MENYENANGKAN. Hindari penjelasan yang terlalu panjang atau bertele-tele.`;
+        const promptWithContext = dbContext 
+          ? `${systemInstruction}\n${dbContext}\n\n[PERTANYAAN PELANGGAN]: "${body}"` 
+          : `${systemInstruction}\n\n[PERTANYAAN PELANGGAN]: "${body}"`;
 
         const sent = picoClawService.send({
           chatId: remoteJid,
