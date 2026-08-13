@@ -8,9 +8,60 @@ import qrcode from 'qrcode-terminal';
 import { Boom } from '@hapi/boom';
 import { config } from './config.js';
 import { loadCommands, handleMessage } from './handlers/messageHandler.js';
+import { picoClawService } from './services/picoClawService.js';
+
+let currentSock = null;
 
 async function startBot() {
   console.log(`[SYS] Initializing ${config.botName}...`);
+
+  // Start PicoClaw WebSocket Server Bridge (Port 3001)
+  picoClawService.connect();
+
+  // Listen for incoming messages from PicoClaw and forward to WhatsApp
+  picoClawService.on('message', async (data) => {
+    console.log('[PicoClaw Bridge] 📩 Raw Data dari PicoClaw:', typeof data === 'object' ? JSON.stringify(data) : data);
+
+    try {
+      if (!currentSock) {
+        console.warn('[PicoClaw Bridge] ⚠️ WhatsApp socket belum terhubung, menunda pengiriman.');
+        return;
+      }
+
+      let text = '';
+      let target = null;
+
+      if (typeof data === 'object' && data !== null) {
+        target = data.chatId || data.senderId || data.to || data.target || data.customerWid || data.user || data.recipient || data.from;
+        text = data.content || data.text || data.body || data.message || data.reply || data.response || data.prompt || data.output;
+
+        if (!text && data.result) {
+          text = typeof data.result === 'string' ? data.result : JSON.stringify(data.result);
+        }
+      } else if (typeof data === 'string') {
+        text = data.trim();
+      }
+
+      // Jika data dari PicoClaw tidak menentukan target spesifik, gunakan user WA terakhir
+      if (!target) {
+        target = picoClawService.getLastTarget();
+      }
+
+      if (target && text) {
+        let formattedTarget = String(target).trim();
+        if (!formattedTarget.includes('@s.whatsapp.net') && !formattedTarget.includes('@g.us') && !formattedTarget.includes('@lid') && !formattedTarget.includes('@c.us')) {
+          formattedTarget = `${formattedTarget.replace(/[^0-9]/g, '')}@s.whatsapp.net`;
+        }
+
+        await currentSock.sendMessage(formattedTarget, { text: `🤖 *[PicoClaw AI]*:\n${text}` });
+        console.log(`[PicoClaw Bridge] ✅ Pesan dari PicoClaw berhasil dikirim ke WhatsApp (${formattedTarget})`);
+      } else {
+        console.warn('[PicoClaw Bridge] ⚠️ Frame diterima dari PicoClaw tetapi tidak ada teks atau target WhatsApp yang valid.');
+      }
+    } catch (err) {
+      console.error('[PicoClaw Bridge] ❌ Gagal meneruskan pesan dari PicoClaw ke WhatsApp:', err.message);
+    }
+  });
 
   // Load commands
   await loadCommands();
@@ -30,6 +81,8 @@ async function startBot() {
     auth: state,
     generateHighQualityLinkPreview: true,
   });
+
+  currentSock = sock;
 
   // Save Credentials on update
   sock.ev.on('creds.update', saveCreds);
