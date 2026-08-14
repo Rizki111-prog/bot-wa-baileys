@@ -21,6 +21,23 @@ export const commands = new Map();
 export const seenUsers = new Set();
 export const userSessions = {};
 
+// Cache untuk pencegahan eksekusi ganda akibat retry otomatis WhatsApp / Bad MAC
+const processedMsgKeys = new Set();
+const MAX_MSG_KEY_CACHE = 2000;
+
+function isDuplicateMessage(msgKeyId) {
+  if (!msgKeyId) return false;
+  if (processedMsgKeys.has(msgKeyId)) {
+    return true;
+  }
+  processedMsgKeys.add(msgKeyId);
+  if (processedMsgKeys.size > MAX_MSG_KEY_CACHE) {
+    const firstItem = processedMsgKeys.values().next().value;
+    processedMsgKeys.delete(firstItem);
+  }
+  return false;
+}
+
 export function getWelcomeMenuText() {
   return `⚡ *SERVICE CENTER WAHYU ELEKTRONIK* ⚡
 
@@ -79,6 +96,13 @@ export async function loadCommands() {
 export async function handleMessage(sock, msg) {
   try {
     if (!msg.message) return;
+
+    // Filter pesan ganda (retry otomatis dari WhatsApp akibat Bad MAC / Reconnect)
+    const msgId = msg.key?.id;
+    if (msgId && isDuplicateMessage(msgId)) {
+      console.log(`[HANDLER] ⏩ Melewati pesan duplikat (Msg ID: ${msgId})`);
+      return;
+    }
 
     // Extract message body across standard and button/interactive message types
     const messageType = Object.keys(msg.message)[0];
