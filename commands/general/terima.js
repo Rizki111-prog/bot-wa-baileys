@@ -3,29 +3,62 @@ import { acceptQueue } from '../../services/adminQueueService.js';
 import { userSessions } from '../../handlers/messageHandler.js';
 
 export function getAdminName(sender, fallbackPushName) {
+  const rawSender = (sender || '').toLowerCase();
+  const cleanSender = rawSender.replace(/[^0-9]/g, '');
+
+  // 1. Cek pencocokan langsung di config.admins (berdasarkan nomor HP, LID, atau string JID)
   if (Array.isArray(config.admins) && config.admins.length > 0) {
-    const rawSender = (sender || '').toLowerCase();
-    const cleanSender = rawSender.replace(/[^0-9]/g, '');
-
     for (const admin of config.admins) {
-      if (!admin || !admin.number) continue;
-      const rawNum = String(admin.number).trim().toLowerCase();
-      const cleanNum = rawNum.replace(/[^0-9]/g, '');
+      if (!admin) continue;
+      const adminNum = String(admin.number || '').trim().toLowerCase();
+      const adminLid = String(admin.lid || '').trim().toLowerCase();
+      const cleanNum = adminNum.replace(/[^0-9]/g, '');
+      const cleanLid = adminLid.replace(/[^0-9]/g, '');
 
-      if (rawSender.includes(rawNum)) {
-        return admin.name || fallbackPushName || 'Admin';
-      }
-
-      if (cleanNum) {
-        let formattedNum = cleanNum.startsWith('0') ? '62' + cleanNum.slice(1) : cleanNum;
-        if (cleanSender.includes(formattedNum)) {
-          return admin.name || fallbackPushName || 'Admin';
-        }
+      if (
+        (adminNum && rawSender.includes(adminNum)) ||
+        (adminLid && rawSender.includes(adminLid)) ||
+        (cleanNum && cleanNum.length >= 5 && cleanSender.includes(cleanNum.startsWith('0') ? '62' + cleanNum.slice(1) : cleanNum)) ||
+        (cleanLid && cleanLid.length >= 5 && cleanSender.includes(cleanLid))
+      ) {
+        if (admin.name) return admin.name;
       }
     }
   }
 
-  return fallbackPushName || config.ownerName || 'Admin';
+  // 2. Jika pengirim cocok dengan config.ownerNumber (misal pengirim menggunakan LID WhatsApp)
+  if (Array.isArray(config.ownerNumber) && config.ownerNumber.length > 0) {
+    const isOwnerSender = config.ownerNumber.some(num => {
+      const rawNum = String(num || '').trim().toLowerCase();
+      if (!rawNum) return false;
+      if (rawSender.includes(rawNum)) return true;
+      const cleanNum = rawNum.replace(/[^0-9]/g, '');
+      if (cleanNum && cleanSender.includes(cleanNum.startsWith('0') ? '62' + cleanNum.slice(1) : cleanNum)) {
+        return true;
+      }
+      return false;
+    });
+
+    if (isOwnerSender) {
+      // Cek apakah ada nomor HP owner yang cocok dengan nama di config.admins
+      if (Array.isArray(config.admins)) {
+        for (const ownerNum of config.ownerNumber) {
+          const cleanOwnerNum = String(ownerNum).replace(/[^0-9]/g, '');
+          for (const admin of config.admins) {
+            const cleanAdminNum = String(admin.number || '').replace(/[^0-9]/g, '');
+            if (cleanOwnerNum && cleanAdminNum && (cleanOwnerNum.includes(cleanAdminNum) || cleanAdminNum.includes(cleanOwnerNum))) {
+              if (admin.name) return admin.name;
+            }
+          }
+        }
+      }
+      // Jika tidak ada di config.admins, kembalikan config.ownerName
+      if (config.ownerName) return config.ownerName;
+    }
+  }
+
+  // 3. Fallback: utamakan config.ownerName daripada WhatsApp pushName profil ponsel
+  return config.ownerName || fallbackPushName || 'Admin';
 }
 
 export const command = {

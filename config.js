@@ -19,8 +19,6 @@ export const config = {
   // Daftar Admin / CS beserta nama masing-masing
   admins: [
     { number: '6281992750353', name: 'Rizki' },
-    { number: '6287747543063', name: 'Abdul' },
-    { number: '6281350094962', name: 'Kurniawan' },
     // { number: '6281234567890', name: 'Budi' }
   ],
   prefix: '.',                    // Prefix perintah (contoh: .menu, .ping)
