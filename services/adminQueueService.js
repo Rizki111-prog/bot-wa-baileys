@@ -64,6 +64,14 @@ export function acceptQueue(queueId, adminJid, adminName, additionalJids = []) {
     return { success: false, reason: 'NOT_FOUND' };
   }
 
+  if (queueItem.status === 'REJECTED') {
+    return {
+      success: false,
+      reason: 'ALREADY_REJECTED',
+      rejectedByAdminName: queueItem.rejectedByAdminName || 'Admin'
+    };
+  }
+
   if (queueItem.status !== 'WAITING') {
     return {
       success: false,
@@ -185,4 +193,49 @@ export function getUserQueue(userJid) {
   if (!userWaitingQueue.has(userJid)) return null;
   const queueId = userWaitingQueue.get(userJid);
   return waitingQueues.get(queueId) || null;
+}
+
+/**
+ * Admin menolak nomor antrian chat pelanggan
+ */
+export function rejectQueue(queueId, adminJid, adminName, reason = '') {
+  const numericId = parseInt(queueId, 10);
+  const queueItem = waitingQueues.get(numericId);
+
+  if (!queueItem) {
+    return { success: false, reason: 'NOT_FOUND' };
+  }
+
+  if (queueItem.status === 'REJECTED') {
+    return {
+      success: false,
+      reason: 'ALREADY_REJECTED',
+      rejectedByAdminName: queueItem.rejectedByAdminName || 'Admin'
+    };
+  }
+
+  if (queueItem.status === 'CONNECTED') {
+    return {
+      success: false,
+      reason: 'ALREADY_CONNECTED',
+      acceptedByAdminName: queueItem.acceptedByAdminName || 'Admin'
+    };
+  }
+
+  // Update status antrian
+  queueItem.status = 'REJECTED';
+  queueItem.rejectedByAdminJid = adminJid;
+  queueItem.rejectedByAdminName = adminName || 'Admin';
+  queueItem.rejectionReason = reason.trim() || 'Admin saat ini sedang tidak dapat melayani permintaan chat.';
+  
+  userWaitingQueue.delete(queueItem.userJid);
+
+  return {
+    success: true,
+    queueItem,
+    userJid: queueItem.userJid,
+    userName: queueItem.userName,
+    messageText: queueItem.messageText,
+    reason: queueItem.rejectionReason
+  };
 }

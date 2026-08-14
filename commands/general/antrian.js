@@ -26,7 +26,7 @@ export const command = {
       text += `   👤 *Pelanggan:* ${q.userName}\n`;
       text += `   📝 *Pesan:* "${q.messageText}"\n`;
       text += `   ⏰ *Waktu:* ${timeStr} WIB\n`;
-      text += `   👉 _Ketik \`.terima ${q.queueId}\` atau \`.acc ${q.queueId}\` untuk mengonfirmasi_\n`;
+      text += `   👉 _Ketik \`.terima ${q.queueId}\` / \`.acc ${q.queueId}\` untuk menerima, atau \`.tolak ${q.queueId}\` untuk menolak_\n`;
       if (idx < queues.length - 1) text += `\n───────────────────\n\n`;
     });
 

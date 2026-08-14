@@ -367,7 +367,7 @@ export async function handleMessage(sock, msg) {
                   `📌 *Nomor Antrian:* #${queue.queueId}\n` +
                   `👤 *Pelanggan:* ${queue.userName} (${remoteJid.split('@')[0]})\n` +
                   `📝 *Isi Pesan:* "${queue.messageText}"\n\n` +
-                  `👉 _Ketik \`.terima ${queue.queueId}\` atau \`.acc ${queue.queueId}\` untuk mengonfirmasi dan memulai percakapan._`
+                  `👉 _Ketik \`.terima ${queue.queueId}\` / \`.acc ${queue.queueId}\` untuk menerima, atau \`.tolak ${queue.queueId} <alasan>\` untuk menolak._`
           });
         } catch (err) {
           console.error(`[QUEUE NOTIFY ERR] Gagal mengirim notifikasi ke admin ${ownerJid}:`, err.message);
