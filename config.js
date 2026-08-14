@@ -14,7 +14,7 @@ dotenv.config();
 export const config = {
   botName: 'Baileys Bot',
   ownerName: 'Owner',
-  ownerNumber: ['6281234567890'], // Ganti dengan nomor WhatsApp pemilik (format internasional tanpa +)
+  ownerNumber: ['6281992750353', '265769036296420'], // Ganti dengan nomor WhatsApp pemilik (format internasional tanpa +) & LID jika ada
   prefix: '.',                    // Prefix perintah (contoh: .menu, .ping)
   sessionName: 'session',         // Nama folder penyimpanan sesi login
   isPublic: true,                 // true: siapapun bisa pakai bot, false: hanya owner

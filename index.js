@@ -144,6 +144,11 @@ async function startBot() {
       for (const msg of m.messages) {
         if (!msg.key.fromMe) {
           await handleMessage(sock, msg);
+        } else if (msg.key.fromMe && msg.message) {
+          const body = msg.message?.conversation || msg.message?.extendedTextMessage?.text || '';
+          if (body.startsWith(config.prefix)) {
+            await handleMessage(sock, msg);
+          }
         }
       }
     }
