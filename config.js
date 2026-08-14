@@ -13,8 +13,16 @@ dotenv.config();
 
 export const config = {
   botName: 'Baileys Bot',
-  ownerName: 'Owner',
+  ownerName: 'Rizki',
   ownerNumber: ['6281992750353', '265769036296420'], // Ganti dengan nomor WhatsApp pemilik (format internasional tanpa +) & LID jika ada
+
+  // Daftar Admin / CS beserta nama masing-masing
+  admins: [
+    { number: '6281992750353', name: 'Rizki' },
+    { number: '6287747543063', name: 'Abdul' },
+    { number: '6285939411170', name: 'Kurniawan' },
+    // { number: '6281234567890', name: 'Budi' }
+  ],
   prefix: '.',                    // Prefix perintah (contoh: .menu, .ping)
   sessionName: 'session',         // Nama folder penyimpanan sesi login
   isPublic: true,                 // true: siapapun bisa pakai bot, false: hanya owner

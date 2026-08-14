@@ -65,7 +65,11 @@ export function acceptQueue(queueId, adminJid, adminName, additionalJids = []) {
   }
 
   if (queueItem.status !== 'WAITING') {
-    return { success: false, reason: 'ALREADY_TAKEN' };
+    return {
+      success: false,
+      reason: 'ALREADY_TAKEN',
+      takenByAdminName: queueItem.acceptedByAdminName || 'Admin Lain'
+    };
   }
 
   // Cek jika admin ini sedang terhubung dalam sesi lain
@@ -81,7 +85,8 @@ export function acceptQueue(queueId, adminJid, adminName, additionalJids = []) {
 
   // Update status antrian
   queueItem.status = 'CONNECTED';
-  waitingQueues.delete(numericId);
+  queueItem.acceptedByAdminJid = adminJid;
+  queueItem.acceptedByAdminName = adminName || 'Admin';
   userWaitingQueue.delete(queueItem.userJid);
 
   const session = {

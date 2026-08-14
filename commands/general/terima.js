@@ -2,6 +2,32 @@ import { config } from '../../config.js';
 import { acceptQueue } from '../../services/adminQueueService.js';
 import { userSessions } from '../../handlers/messageHandler.js';
 
+export function getAdminName(sender, fallbackPushName) {
+  if (Array.isArray(config.admins) && config.admins.length > 0) {
+    const rawSender = (sender || '').toLowerCase();
+    const cleanSender = rawSender.replace(/[^0-9]/g, '');
+
+    for (const admin of config.admins) {
+      if (!admin || !admin.number) continue;
+      const rawNum = String(admin.number).trim().toLowerCase();
+      const cleanNum = rawNum.replace(/[^0-9]/g, '');
+
+      if (rawSender.includes(rawNum)) {
+        return admin.name || fallbackPushName || 'Admin';
+      }
+
+      if (cleanNum) {
+        let formattedNum = cleanNum.startsWith('0') ? '62' + cleanNum.slice(1) : cleanNum;
+        if (cleanSender.includes(formattedNum)) {
+          return admin.name || fallbackPushName || 'Admin';
+        }
+      }
+    }
+  }
+
+  return fallbackPushName || config.ownerName || 'Admin';
+}
+
 export const command = {
   name: 'terima',
   aliases: ['acc', 'accept', 'konfirmasi'],
@@ -13,7 +39,7 @@ export const command = {
       return await reply(
         `⚠️ *Perintah ini hanya dapat dijalankan oleh Admin / Owner.*\n\n` +
         `📌 *ID Sender Anda:* \`${sender}\`\n` +
-        `💡 _Pastikan ID / nomor di atas telah terdaftar di \`config.ownerNumber\` dalam file config.js._`
+        `💡 _Pastikan ID / nomor di atas telah terdaftar di \`config.admins\` atau \`config.ownerNumber\` dalam file config.js._`
       );
     }
 
@@ -30,7 +56,7 @@ export const command = {
       return await reply('⚠️ Nomor antrian harus berupa angka (misal: `.terima 1`).');
     }
 
-    const adminName = msg.pushName || config.ownerName || 'Admin';
+    const adminName = getAdminName(sender, msg.pushName);
     const additionalJids = [sender, msg.key.remoteJid, msg.key.participant].filter(Boolean);
     const result = acceptQueue(queueId, sender, adminName, additionalJids);
 
@@ -39,7 +65,7 @@ export const command = {
         return await reply(`⚠️ Nomor antrian *#${queueId}* tidak ditemukan dalam daftar antrian.`);
       }
       if (result.reason === 'ALREADY_TAKEN') {
-        return await reply(`⚠️ Nomor antrian *#${queueId}* sudah diterima atau sudah diproses oleh admin lain.`);
+        return await reply(`⚠️ Nomor antrian *#${queueId}* sudah diambil oleh (~${result.takenByAdminName || 'Admin Lain'}).`);
       }
       if (result.reason === 'ADMIN_BUSY') {
         return await reply(

@@ -349,21 +349,28 @@ export async function handleMessage(sock, msg) {
         `💡 _Ketik *batal* untuk membatalkan antrian._`
       );
 
-      // 2. Kirim Notifikasi ke Nomor Admin / Owner
+      // 2. Kirim Notifikasi ke Semua Nomor Admin / Owner
+      const adminTargets = [];
+      if (Array.isArray(config.admins)) {
+        config.admins.forEach(a => { if (a && a.number) adminTargets.push(a.number); });
+      }
       if (Array.isArray(config.ownerNumber)) {
-        for (const num of config.ownerNumber) {
-          const ownerJid = num.includes('@') ? num : `${num.replace(/[^0-9]/g, '')}@s.whatsapp.net`;
-          try {
-            await sock.sendMessage(ownerJid, {
-              text: `🔔 *PERMINTAAN CHAT ADMIN BARU!*\n\n` +
-                    `📌 *Nomor Antrian:* #${queue.queueId}\n` +
-                    `👤 *Pelanggan:* ${queue.userName} (${remoteJid.split('@')[0]})\n` +
-                    `📝 *Isi Pesan:* "${queue.messageText}"\n\n` +
-                    `👉 _Ketik \`.terima ${queue.queueId}\` atau \`.acc ${queue.queueId}\` untuk mengonfirmasi dan memulai percakapan._`
-            });
-          } catch (err) {
-            console.error(`[QUEUE NOTIFY ERR] Gagal mengirim notifikasi ke owner ${ownerJid}:`, err.message);
-          }
+        config.ownerNumber.forEach(n => { if (n) adminTargets.push(n); });
+      }
+      const uniqueAdminTargets = [...new Set(adminTargets)];
+
+      for (const num of uniqueAdminTargets) {
+        const ownerJid = num.includes('@') ? num : `${num.replace(/[^0-9]/g, '')}@s.whatsapp.net`;
+        try {
+          await sock.sendMessage(ownerJid, {
+            text: `🔔 *PERMINTAAN CHAT ADMIN BARU!*\n\n` +
+                  `📌 *Nomor Antrian:* #${queue.queueId}\n` +
+                  `👤 *Pelanggan:* ${queue.userName} (${remoteJid.split('@')[0]})\n` +
+                  `📝 *Isi Pesan:* "${queue.messageText}"\n\n` +
+                  `👉 _Ketik \`.terima ${queue.queueId}\` atau \`.acc ${queue.queueId}\` untuk mengonfirmasi dan memulai percakapan._`
+          });
+        } catch (err) {
+          console.error(`[QUEUE NOTIFY ERR] Gagal mengirim notifikasi ke admin ${ownerJid}:`, err.message);
         }
       }
 
