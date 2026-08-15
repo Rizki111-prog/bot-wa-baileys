@@ -303,14 +303,13 @@ export async function handleMessage(sock, msg) {
     // 4. ALUR BOT UNTUK MENU 1 (INPUT SERVICE ID)
     if (currentSession && currentSession.step === 'AWAITING_SERVICE_ID') {
       const inputId = body.trim();
-      delete userSessions[remoteJid]; // Selesai alur cek status
 
       try {
         const results = await checkStatusStrict(inputId);
 
         if (!results || results.length === 0) {
-          userSessions[remoteJid] = { step: 'AWAITING_MENU_CHOICE' };
-          const notFoundText = `⚠️ *Data status servis tidak ditemukan.*\n\nID Servis \`${inputId}\` tidak ditemukan pada data barang masuk, selesai, maupun diambil.\n\n💡 _Ketik *1* untuk coba lagi, ketik *2* untuk hubungi CS/Admin, atau ketik *menu* untuk kembali._`;
+          delete userSessions[remoteJid];
+          const notFoundText = `⚠️ *Data status servis tidak ditemukan.*\n\nID Servis \`${inputId}\` tidak ditemukan pada data barang masuk, selesai, maupun diambil.\n\n💡 _Ketik *menu* untuk kembali ke Menu Utama, atau ketik *2* setelah membuka menu untuk hubungi CS/Admin._`;
           return await reply(notFoundText);
         }
 
@@ -339,8 +338,8 @@ export async function handleMessage(sock, msg) {
           if (idx < results.length - 1) text += `\n───────────────────\n\n`;
         });
 
-        userSessions[remoteJid] = { step: 'AWAITING_MENU_CHOICE' };
-        text += `\n💡 _Ketik *2* untuk konsultasi CS/Admin, atau ketik *menu* untuk kembali._`;
+        delete userSessions[remoteJid];
+        text += `\n💡 _Ketik *menu* untuk kembali ke Menu Utama._`;
         return await reply(text.trim());
 
       } catch (err) {
@@ -359,6 +358,11 @@ export async function handleMessage(sock, msg) {
         `Silakan ketik / masukkan *isi pesan* atau kendala yang ingin Anda sampaikan kepada Admin:\n\n` +
         `💡 _Ketik *batal* untuk kembali ke menu utama._`
       );
+    }
+
+    // Jika ada session menu choice tapi input bukan 1 atau 2, hapus session agar pesan berikutnya dianggap chat AI biasa
+    if (isMenuChoiceStep) {
+      delete userSessions[remoteJid];
     }
 
     // 6. ALUR BOT UNTUK MENU 2 (USER MENGIRIM ISI PESAN -> DAPAT NO ANTRIAN)
