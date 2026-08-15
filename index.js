@@ -14,18 +14,7 @@ import { testConnection } from './db.js';
 let currentSock = null;
 
 function formatAiReply(rawText) {
-  let cleaned = String(rawText || '').trim();
-  cleaned = cleaned
-    .replace(/🦞/g, '')
-    .replace(/🤖/g, '')
-    .replace(/^(\*?\[?PicoClaw AI\]?\*?:?\s*)/gi, '')
-    .replace(/^PicoClaw\s*:?\s*/gi, '')
-    .trim();
-
-  if (!cleaned) return '';
-  if (cleaned.endsWith('-cs ai')) return cleaned;
-
-  return cleaned.includes('\n') ? `${cleaned}\n\n-cs ai` : `${cleaned} -cs ai`;
+  return String(rawText || '').trim();
 }
 
 

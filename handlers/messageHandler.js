@@ -438,27 +438,11 @@ export async function handleMessage(sock, msg) {
       if (isPicoClawConnected()) {
         picoClawService.setLastTarget(remoteJid);
 
-        // Ambil konteks database resmi dari Laragon (status servis & estimasi biaya)
+        // Ambil konteks database resmi dari Laragon (status servis & estimasi biaya) jika ada
         const dbContext = await buildDbContext(body);
-        const systemInstruction = `[PERAN & BATASAN CS AI WAHYU ELEKTRONIK]:
-1. Anda adalah CS AI resmi Service Center Wahyu Elektronik yang ramah, sopan, to the point, dan membantu.
-2. Tugas Anda melayani chat/obrolan pelanggan di luar pilihan menu otomatis (lokasi toko, jam buka, prosedur servis, estimasi biaya, garansi, kendala teknis elektronik).
-3. PANDUAN NAVIGASI MENU BOT:
-   - Apabila pelanggan menanyakan cara melihat menu, meminta pilihan layanan, atau ingin menggunakan fitur otomatis bot, beri petunjuk berikut:
-     • Ketik "menu" atau "0" untuk kembali ke Menu Utama.
-     • Ketik "1" untuk Cek Status Servis (masukkan ID Servis).
-     • Ketik "2" atau "admin" untuk Hubungi Admin / CS Manusia.
-4. ESTIMASI KEBUTUHAN BANTUAN ADMIN:
-   - Analisis apakah pesan/kendala pelanggan memerlukan penanganan langsung dari Admin manusia (seperti: komplain, negosiasi harga khusus, konsultasi kerusakan rumit, garansi khusus, atau jika pelanggan secara eksplisit ingin berbicara dengan Admin/Manusia).
-   - Jika Anda memperkirakan pelanggan PERLU bantuan Admin, berikan jawaban awal yang membantu DAN akhiri dengan saran berikut:
-     "💡 _Jika Anda membutuhkan bantuan/konsultasi langsung dari Admin kami, silakan ketik *2* atau *admin* untuk masuk ke antrian Chat Admin._"
-5. BATASAN TOPIK:
-   - DILARANG MENJAWAB pertanyaan di luar seputar toko (seperti cuaca, berita, politik, resep, dll). Tolak dengan ramah dan tawarkan bantuan seputar Wahyu Elektronik.
-6. Jawablah secara SINGKAT, SIMPEL, RAMAH, dan RAPI.`;
-
         const promptWithContext = dbContext 
-          ? `${systemInstruction}\n${dbContext}\n\n[PERTANYAAN PELANGGAN]: "${body}"` 
-          : `${systemInstruction}\n\n[PERTANYAAN PELANGGAN]: "${body}"`;
+          ? `${dbContext}\n\n[PERTANYAAN PELANGGAN]: "${body}"` 
+          : body;
 
         const sent = picoClawService.send({
           chatId: remoteJid,
