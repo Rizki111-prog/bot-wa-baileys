@@ -285,8 +285,12 @@ export async function handleMessage(sock, msg) {
       return await reply(getWelcomeMenuText());
     }
 
-    // 3. PILIHAN MENU 1: CEK STATUS SERVIS
-    if (lowerBody === '1' || lowerBody === 'cek status' || lowerBody === 'status' || lowerBody === `${config.prefix}status`) {
+    // 3. PILIHAN MENU 1: CEK STATUS SERVIS (Harus tampil pesan menu sebelumnya)
+    const currentSession = userSessions[remoteJid];
+    const isMenuChoiceStep = currentSession?.step === 'AWAITING_MENU_CHOICE';
+    const isStatusInputTrigger = lowerBody === '1' || lowerBody === 'cek status' || lowerBody === 'status' || lowerBody === `${config.prefix}status`;
+
+    if (isMenuChoiceStep && isStatusInputTrigger) {
       userSessions[remoteJid] = { step: 'AWAITING_SERVICE_ID' };
       return await reply(
         `🔎 *CEK STATUS SERVIS*\n\n` +
@@ -297,7 +301,6 @@ export async function handleMessage(sock, msg) {
     }
 
     // 4. ALUR BOT UNTUK MENU 1 (INPUT SERVICE ID)
-    const currentSession = userSessions[remoteJid];
     if (currentSession && currentSession.step === 'AWAITING_SERVICE_ID') {
       const inputId = body.trim();
       delete userSessions[remoteJid]; // Selesai alur cek status
@@ -306,6 +309,7 @@ export async function handleMessage(sock, msg) {
         const results = await checkStatusStrict(inputId);
 
         if (!results || results.length === 0) {
+          userSessions[remoteJid] = { step: 'AWAITING_MENU_CHOICE' };
           const notFoundText = `⚠️ *Data status servis tidak ditemukan.*\n\nID Servis \`${inputId}\` tidak ditemukan pada data barang masuk, selesai, maupun diambil.\n\n💡 _Ketik *1* untuk coba lagi, ketik *2* untuk hubungi CS/Admin, atau ketik *menu* untuk kembali._`;
           return await reply(notFoundText);
         }
@@ -335,6 +339,7 @@ export async function handleMessage(sock, msg) {
           if (idx < results.length - 1) text += `\n───────────────────\n\n`;
         });
 
+        userSessions[remoteJid] = { step: 'AWAITING_MENU_CHOICE' };
         text += `\n💡 _Ketik *2* untuk konsultasi CS/Admin, atau ketik *menu* untuk kembali._`;
         return await reply(text.trim());
 
@@ -344,8 +349,10 @@ export async function handleMessage(sock, msg) {
       }
     }
 
-    // 5. PILIHAN MENU 2: CHAT ADMIN (USER DIMINTA MASUKKAN ISI PESAN DAHULU)
-    if (lowerBody === '2' || lowerBody === 'admin' || lowerBody === 'chat admin' || lowerBody === `${config.prefix}admin`) {
+    // 5. PILIHAN MENU 2: CHAT ADMIN (Harus tampil pesan menu sebelumnya)
+    const isAdminInputTrigger = lowerBody === '2' || lowerBody === 'admin' || lowerBody === 'chat admin' || lowerBody === `${config.prefix}admin`;
+
+    if (isMenuChoiceStep && isAdminInputTrigger) {
       userSessions[remoteJid] = { step: 'AWAITING_ADMIN_QUEUE_MSG' };
       return await reply(
         `💬 *HUBUNGI ADMIN / CS*\n\n` +
