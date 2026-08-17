@@ -40,6 +40,10 @@ class PicoClawService extends EventEmitter {
   }
 
   startServer() {
+    if (this.wss) {
+      console.log('[PicoClaw] ℹ️ WebSocket Server Bridge sudah berjalan.');
+      return;
+    }
     const port = Number(this.options.port || this.options.serverPort || 3001);
     console.log(`[PicoClaw] 🚀 Menjalankan WebSocket Server Bridge di port ${port}...`);
 
@@ -100,6 +104,10 @@ class PicoClawService extends EventEmitter {
   }
 
   startClient() {
+    if (this.wsClient && (this.wsClient.readyState === WebSocket.CONNECTING || this.wsClient.readyState === WebSocket.OPEN)) {
+      console.log('[PicoClaw] ℹ️ WebSocket Client sudah terhubung.');
+      return;
+    }
     const url = this.options.url || 'ws://localhost:3001';
     this.isExplicitClosed = false;
     console.log(`[PicoClaw] Menghubungkan ke WebSocket PicoClaw di ${url}...`);

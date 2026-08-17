@@ -97,6 +97,14 @@ export async function handleMessage(sock, msg) {
   try {
     if (!msg.message) return;
 
+    // Filter pesan lama dari history sync / reconnect (misal lebih dari 3 menit / 180 detik)
+    const msgTimestamp = msg.messageTimestamp ? (typeof msg.messageTimestamp === 'number' ? msg.messageTimestamp : msg.messageTimestamp.low || 0) : 0;
+    const nowSec = Math.floor(Date.now() / 1000);
+    if (msgTimestamp > 0 && (nowSec - msgTimestamp) > 180) {
+      console.log(`[HANDLER] ⏩ Melewati pesan lama dari history sync/offline (Timestamp: ${msgTimestamp})`);
+      return;
+    }
+
     // Filter pesan ganda (retry otomatis dari WhatsApp akibat Bad MAC / Reconnect)
     const msgId = msg.key?.id;
     if (msgId && isDuplicateMessage(msgId)) {

@@ -18,16 +18,37 @@ function formatAiReply(rawText) {
 }
 
 
-async function startBot() {
-  console.log(`[SYS] Initializing ${config.botName}...`);
+// Deduplikasi balasan AI untuk mencegah pengiriman pesan identik berturut-turut dalam 5 detik
+const recentAiReplies = new Map();
 
-  // Test Database Connection
-  await testConnection();
+function isDuplicateAiReply(target, text) {
+  const key = `${target}:${text}`;
+  const now = Date.now();
+  if (recentAiReplies.has(key)) {
+    const timestamp = recentAiReplies.get(key);
+    if (now - timestamp < 5000) {
+      return true;
+    }
+  }
+  recentAiReplies.set(key, now);
+  if (recentAiReplies.size > 500) {
+    for (const [k, v] of recentAiReplies.entries()) {
+      if (now - v > 10000) recentAiReplies.delete(k);
+    }
+  }
+  return false;
+}
+
+let isPicoClawBridgeSetup = false;
+
+function setupPicoClawBridge() {
+  if (isPicoClawBridgeSetup) return;
+  isPicoClawBridgeSetup = true;
 
   // Start PicoClaw WebSocket Server Bridge (Port 3001)
   picoClawService.connect();
 
-  // Listen for incoming messages from PicoClaw and forward to WhatsApp
+  // Listen for incoming messages from PicoClaw and forward to WhatsApp (Hanya didaftarkan 1x)
   picoClawService.on('message', async (data) => {
     console.log('[PicoClaw Bridge] 📩 Raw Data dari PicoClaw:', typeof data === 'object' ? JSON.stringify(data) : data);
 
@@ -63,6 +84,11 @@ async function startBot() {
         }
 
         const replyText = formatAiReply(text);
+        if (isDuplicateAiReply(formattedTarget, replyText)) {
+          console.warn(`[PicoClaw Bridge] ⏩ Melewati balasan duplikat ke ${formattedTarget} ("${replyText.substring(0, 30)}...")`);
+          return;
+        }
+
         await currentSock.sendMessage(formattedTarget, { text: replyText });
         console.log(`[PicoClaw Bridge] ✅ Pesan dari PicoClaw berhasil dikirim ke WhatsApp (${formattedTarget})`);
       } else {
@@ -72,6 +98,16 @@ async function startBot() {
       console.error('[PicoClaw Bridge] ❌ Gagal meneruskan pesan dari PicoClaw ke WhatsApp:', err.message);
     }
   });
+}
+
+async function startBot() {
+  console.log(`[SYS] Initializing ${config.botName}...`);
+
+  // Test Database Connection
+  await testConnection();
+
+  // Inisialisasi PicoClaw Bridge (hanya didaftarkan sekali)
+  setupPicoClawBridge();
 
   // Load commands
   await loadCommands();
