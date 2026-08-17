@@ -133,9 +133,9 @@ export async function checkServicePrice(keyword) {
     const [rows] = await query(`
       SELECT service_id, nama_barang, kategori_barang, kerusakan, catatan_perbaikan, biaya 
       FROM barang_selesai 
-      WHERE (nama_barang LIKE ? OR kategori_barang LIKE ? OR service_id = ?) AND biaya > 0
-      ORDER BY id DESC LIMIT 3
-    `, [searchPattern, searchPattern, cleanKey]);
+      WHERE (nama_barang LIKE ? OR kategori_barang LIKE ? OR kerusakan LIKE ? OR service_id = ?) AND biaya > 0
+      ORDER BY id DESC LIMIT 10
+    `, [searchPattern, searchPattern, searchPattern, cleanKey]);
     selesaiPrices = rows;
   } catch (e) {}
 
@@ -144,9 +144,9 @@ export async function checkServicePrice(keyword) {
     const [rows] = await query(`
       SELECT service_id, nama_barang, kategori_barang, kerusakan, catatan_perbaikan, biaya 
       FROM barang_diambil 
-      WHERE (nama_barang LIKE ? OR kategori_barang LIKE ? OR service_id = ?) AND biaya > 0
-      ORDER BY id DESC LIMIT 3
-    `, [searchPattern, searchPattern, cleanKey]);
+      WHERE (nama_barang LIKE ? OR kategori_barang LIKE ? OR kerusakan LIKE ? OR service_id = ?) AND biaya > 0
+      ORDER BY id DESC LIMIT 10
+    `, [searchPattern, searchPattern, searchPattern, cleanKey]);
     diambilPrices = rows;
   } catch (e) {}
 
@@ -183,20 +183,43 @@ export async function buildDbContext(userMessage) {
     }
   }
 
-  const words = text.toLowerCase().split(/[^a-z0-9]+/i).filter(w => w.length > 2 && !['bisa', 'tolong', 'yang', 'untuk', 'dengan', 'saya', 'apa', 'ada', 'dari', 'bantu', 'cek', 'servis', 'barang', 'harga', 'biaya', 'halo', 'info', 'lokasi', 'toko'].includes(w));
+  const stopWords = [
+    'bisa', 'tolong', 'yang', 'untuk', 'dengan', 'saya', 'apa', 'ada', 
+    'dari', 'bantu', 'cek', 'servis', 'barang', 'harga', 'biaya', 'halo', 
+    'info', 'lokasi', 'toko', 'berapa', 'perbaiki', 'ganti'
+  ];
+
+  const words = text.toLowerCase()
+    .split(/[^a-z0-9]+/i)
+    .filter(w => w.length > 2 && !stopWords.includes(w));
 
   if (words.length > 0 && dbContextLines.length === 0) {
-    for (const searchKey of words.slice(0, 1)) {
+    const fetchedPriceRows = [];
+    const seenKeys = new Set();
+
+    // Ambil hingga 3 kata kunci utama dari pesan user
+    for (const searchKey of words.slice(0, 3)) {
       try {
         const priceRows = await checkServicePrice(searchKey);
         if (priceRows && priceRows.length > 0) {
-          let priceContext = `[DB_BIAYA: `;
-          priceRows.slice(0, 2).forEach((p, idx) => {
-            priceContext += `${idx + 1}. ${p.nama_barang}(${p.kategori})/${p.kerusakan}=${p.biaya_formatted} `;
-          });
-          dbContextLines.push((priceContext + ']').trim());
+          for (const p of priceRows) {
+            const uniqueKey = p.service_id || `${p.nama_barang}-${p.kerusakan}-${p.biaya_formatted}`;
+            if (!seenKeys.has(uniqueKey)) {
+              seenKeys.add(uniqueKey);
+              fetchedPriceRows.push(p);
+            }
+          }
         }
       } catch (e) {}
+    }
+
+    if (fetchedPriceRows.length > 0) {
+      let priceContext = `[DB_BIAYA: `;
+      // Ambil hingga 5 baris riwayat harga teratas
+      fetchedPriceRows.slice(0, 5).forEach((p, idx) => {
+        priceContext += `${idx + 1}. ${p.nama_barang}(${p.kategori})/${p.kerusakan}=${p.biaya_formatted} `;
+      });
+      dbContextLines.push((priceContext + ']').trim());
     }
   }
 
