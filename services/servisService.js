@@ -123,43 +123,106 @@ export async function checkStatusStrict(serviceId, customerName) {
   return results;
 }
 
-export async function checkServicePrice(keyword) {
-  const cleanKey = keyword ? keyword.trim() : '';
-  if (!cleanKey) return [];
-  const searchPattern = `%${cleanKey}%`;
+export async function checkServicePrice(userQuery) {
+  const text = String(userQuery || '').trim();
+  if (!text) return [];
+
+  const stopWords = [
+    'bisa', 'tolong', 'yang', 'untuk', 'dengan', 'saya', 'apa', 'ada', 
+    'dari', 'bantu', 'cek', 'servis', 'service', 'barang', 'harga', 'biaya', 'halo', 
+    'info', 'lokasi', 'toko', 'berapa', 'perbaiki', 'perbaikan', 'memperbaiki', 'benerin', 'ganti',
+    'penggantian', 'penanganan', 'tanya', 'kak', 'min', 'gan', 'bro', 'sis', 'mas', 'mbak', 'dong', 'kah',
+    'estimasi', 'kira', 'kisaran', 'mau', 'ingin', 'tahu', 'donk', 'hp', 'handphone', 'unit'
+  ];
+
+  const words = text.toLowerCase()
+    .split(/[^a-z0-9]+/i)
+    .filter(w => w.length >= 2 && !stopWords.includes(w));
+
+  if (words.length === 0) return [];
+
+  const scoreParts = [];
+  const whereParts = [];
+  const scoreParams = [];
+  const whereParams = [];
+
+  words.forEach(w => {
+    let termPattern = `%${w}%`;
+    const isModelNumber = /\d/.test(w);
+    const weight = isModelNumber ? 5 : 2;
+
+    // Normalisasi variasi ejaan brand populer (contoh: realme vs realmi di database)
+    if (w === 'realme' || w === 'realmi') {
+      termPattern = '%realm%';
+    } else if (w === 'xiaomi' || w === 'siomi' || w === 'redmi') {
+      termPattern = '%xi%';
+    } else if (w === 'samsung' || w === 'samson') {
+      termPattern = '%sams%';
+    } else if (w === 'iphone' || w === 'ip') {
+      termPattern = '%iph%';
+    }
+
+    scoreParts.push(`(CASE WHEN LOWER(nama_barang) LIKE ? OR LOWER(kategori_barang) LIKE ? OR LOWER(kerusakan) LIKE ? THEN ${weight} ELSE 0 END)`);
+    scoreParams.push(termPattern, termPattern, termPattern);
+
+    whereParts.push(`(LOWER(nama_barang) LIKE ? OR LOWER(kategori_barang) LIKE ? OR LOWER(kerusakan) LIKE ?)`);
+    whereParams.push(termPattern, termPattern, termPattern);
+  });
+
+  const sqlScore = scoreParts.join(' + ');
+  const sqlWhere = whereParts.join(' OR ');
+  const queryParams = [...scoreParams, ...whereParams];
 
   let selesaiPrices = [];
   try {
     const [rows] = await query(`
-      SELECT service_id, nama_barang, kategori_barang, kerusakan, catatan_perbaikan, biaya 
+      SELECT service_id, nama_barang, kategori_barang, kerusakan, catatan_perbaikan, biaya,
+        (${sqlScore}) AS score
       FROM barang_selesai 
-      WHERE (nama_barang LIKE ? OR kategori_barang LIKE ? OR kerusakan LIKE ? OR service_id = ?) AND biaya > 0
-      ORDER BY id DESC LIMIT 10
-    `, [searchPattern, searchPattern, searchPattern, cleanKey]);
+      WHERE biaya > 0 AND (${sqlWhere})
+      ORDER BY score DESC, id DESC LIMIT 10
+    `, queryParams);
     selesaiPrices = rows;
-  } catch (e) {}
+  } catch (e) {
+    console.error('[DB ERROR] checkServicePrice (selesai):', e.message);
+  }
 
   let diambilPrices = [];
   try {
     const [rows] = await query(`
-      SELECT service_id, nama_barang, kategori_barang, kerusakan, catatan_perbaikan, biaya 
+      SELECT service_id, nama_barang, kategori_barang, kerusakan, catatan_perbaikan, biaya,
+        (${sqlScore}) AS score
       FROM barang_diambil 
-      WHERE (nama_barang LIKE ? OR kategori_barang LIKE ? OR kerusakan LIKE ? OR service_id = ?) AND biaya > 0
-      ORDER BY id DESC LIMIT 10
-    `, [searchPattern, searchPattern, searchPattern, cleanKey]);
+      WHERE biaya > 0 AND (${sqlWhere})
+      ORDER BY score DESC, id DESC LIMIT 10
+    `, queryParams);
     diambilPrices = rows;
-  } catch (e) {}
+  } catch (e) {
+    console.error('[DB ERROR] checkServicePrice (diambil):', e.message);
+  }
 
-  const combined = [...selesaiPrices, ...diambilPrices];
+  const combined = [...selesaiPrices, ...diambilPrices].sort((a, b) => (b.score || 0) - (a.score || 0));
 
-  return combined.map(item => ({
-    service_id: item.service_id,
-    nama_barang: item.nama_barang || item.kategori_barang || 'Unit Servis',
-    kategori: item.kategori_barang || '-',
-    kerusakan: item.kerusakan || '-',
-    catatan: item.catatan_perbaikan || '-',
-    biaya_formatted: formatRupiah(item.biaya)
-  }));
+  const uniqueList = [];
+  const seenKeys = new Set();
+
+  for (const item of combined) {
+    const key = `${item.nama_barang}-${item.kerusakan}-${item.biaya}`;
+    if (!seenKeys.has(key)) {
+      seenKeys.add(key);
+      uniqueList.push({
+        service_id: item.service_id,
+        nama_barang: item.nama_barang || item.kategori_barang || 'Unit Servis',
+        kategori: item.kategori_barang || '-',
+        kerusakan: item.kerusakan || '-',
+        catatan: item.catatan_perbaikan || '-',
+        biaya_formatted: formatRupiah(item.biaya),
+        score: item.score || 0
+      });
+    }
+  }
+
+  return uniqueList;
 }
 
 export async function buildDbContext(userMessage) {
@@ -183,43 +246,20 @@ export async function buildDbContext(userMessage) {
     }
   }
 
-  const stopWords = [
-    'bisa', 'tolong', 'yang', 'untuk', 'dengan', 'saya', 'apa', 'ada', 
-    'dari', 'bantu', 'cek', 'servis', 'barang', 'harga', 'biaya', 'halo', 
-    'info', 'lokasi', 'toko', 'berapa', 'perbaiki', 'ganti'
-  ];
-
-  const words = text.toLowerCase()
-    .split(/[^a-z0-9]+/i)
-    .filter(w => w.length > 2 && !stopWords.includes(w));
-
-  if (words.length > 0 && dbContextLines.length === 0) {
-    const fetchedPriceRows = [];
-    const seenKeys = new Set();
-
-    // Ambil hingga 3 kata kunci utama dari pesan user
-    for (const searchKey of words.slice(0, 3)) {
-      try {
-        const priceRows = await checkServicePrice(searchKey);
-        if (priceRows && priceRows.length > 0) {
-          for (const p of priceRows) {
-            const uniqueKey = p.service_id || `${p.nama_barang}-${p.kerusakan}-${p.biaya_formatted}`;
-            if (!seenKeys.has(uniqueKey)) {
-              seenKeys.add(uniqueKey);
-              fetchedPriceRows.push(p);
-            }
-          }
-        }
-      } catch (e) {}
-    }
-
-    if (fetchedPriceRows.length > 0) {
-      let priceContext = `[DB_BIAYA: `;
-      // Ambil hingga 5 baris riwayat harga teratas
-      fetchedPriceRows.slice(0, 5).forEach((p, idx) => {
-        priceContext += `${idx + 1}. ${p.nama_barang}(${p.kategori})/${p.kerusakan}=${p.biaya_formatted} `;
-      });
-      dbContextLines.push((priceContext + ']').trim());
+  // Jika tidak ada ID nota spesifik yang dicocokkan, cari estimasi biaya berdasarkan pertanyaan user
+  if (dbContextLines.length === 0) {
+    try {
+      const priceRows = await checkServicePrice(text);
+      if (priceRows && priceRows.length > 0) {
+        let priceContext = `[DB_BIAYA: `;
+        // Ambil hingga 5 data teratas dengan skor relevansi tertinggi
+        priceRows.slice(0, 5).forEach((p, idx) => {
+          priceContext += `${idx + 1}. ${p.nama_barang}(${p.kategori})/${p.kerusakan}=${p.biaya_formatted} `;
+        });
+        dbContextLines.push((priceContext + ']').trim());
+      }
+    } catch (e) {
+      console.error('[DB CONTEXT BUILD ERR]', e.message);
     }
   }
 
